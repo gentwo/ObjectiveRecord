@@ -21,14 +21,17 @@
 // THE SOFTWARE.
 
 #import "CoreDataManager.h"
+#import "ObjectiveSugar.h"
+
+@interface CoreDataManager ()
+
+@property (readwrite, strong, nonatomic) NSManagedObjectContext *managedObjectContext;
+@property (readwrite, strong, nonatomic) NSManagedObjectModel *managedObjectModel;
+@property (readwrite, strong, nonatomic) NSPersistentStoreCoordinator *persistentStoreCoordinator;
+
+@end
 
 @implementation CoreDataManager
-@synthesize managedObjectContext = _managedObjectContext;
-@synthesize managedObjectModel = _managedObjectModel;
-@synthesize persistentStoreCoordinator = _persistentStoreCoordinator;
-@synthesize databaseName = _databaseName;
-@synthesize modelName = _modelName;
-
 
 + (id)instance {
     return [self sharedManager];
@@ -109,6 +112,36 @@
     }
 
     return YES;
+}
+
+-(BOOL)resetStore {
+  BOOL success = NO;
+  NSManagedObjectContext *managedObjectContext = self.managedObjectContext;
+  NSPersistentStoreCoordinator *persistentStoreCoordinator = self.persistentStoreCoordinator;
+  [managedObjectContext lock];
+  [managedObjectContext reset];
+  NSPersistentStore *store = [persistentStoreCoordinator persistentStores].lastObject;
+  if (store) {
+    NSURL *storeURL = store.URL;
+    NSError *error;
+    if([persistentStoreCoordinator removePersistentStore:store error:&error]) {
+      _persistentStoreCoordinator = nil;
+      _managedObjectContext = nil;
+      if ([[NSFileManager defaultManager] removeItemAtPath:storeURL.path error:&error]) {
+        [[NSFileManager defaultManager] createFileAtPath:storeURL.path contents:[NSData data] attributes:nil];
+        [[NSFileManager defaultManager] removeItemAtPath:storeURL.path error:&error];
+        [[self managedObjectContext] reset];
+        [[self managedObjectContext] unlock];
+        success = YES;
+      } else {
+        NSLog(@"resetStore: Error remove store file: %@", [error localizedDescription]);
+      }
+    } else {
+      NSLog(@"resetStore: Error removing persistent Store[%@]: %@", storeURL, [error localizedDescription]);
+      [managedObjectContext unlock];
+    }
+  }
+  return success;
 }
 
 
