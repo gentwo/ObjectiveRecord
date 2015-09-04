@@ -115,32 +115,29 @@
 }
 
 -(BOOL)resetStore {
-  BOOL success = NO;
+  __block BOOL success = NO;
   NSManagedObjectContext *managedObjectContext = self.managedObjectContext;
   NSPersistentStoreCoordinator *persistentStoreCoordinator = self.persistentStoreCoordinator;
-  [managedObjectContext lock];
-  [managedObjectContext reset];
-  NSPersistentStore *store = [persistentStoreCoordinator persistentStores].lastObject;
-  if (store) {
-    NSURL *storeURL = store.URL;
-    NSError *error;
-    if([persistentStoreCoordinator removePersistentStore:store error:&error]) {
-      _persistentStoreCoordinator = nil;
-      _managedObjectContext = nil;
-      if ([[NSFileManager defaultManager] removeItemAtPath:storeURL.path error:&error]) {
-        [[NSFileManager defaultManager] createFileAtPath:storeURL.path contents:[NSData data] attributes:nil];
-        [[NSFileManager defaultManager] removeItemAtPath:storeURL.path error:&error];
-        [[self managedObjectContext] reset];
-        [[self managedObjectContext] unlock];
-        success = YES;
+  [managedObjectContext performBlockAndWait:^{
+    [managedObjectContext reset];
+    NSPersistentStore *store = [persistentStoreCoordinator persistentStores].lastObject;
+    if (store) {
+      NSURL *storeURL = store.URL;
+      NSError *error;
+      if([persistentStoreCoordinator removePersistentStore:store error:&error]) {
+        _persistentStoreCoordinator = nil;
+        _managedObjectContext = nil;
+        if ([[NSFileManager defaultManager] removeItemAtPath:storeURL.path error:&error]) {
+          [[self managedObjectContext] reset]; // reinitialize...
+          success = YES;
+        } else {
+          NSLog(@"resetStore: Error remove store file: %@", [error localizedDescription]);
+        }
       } else {
-        NSLog(@"resetStore: Error remove store file: %@", [error localizedDescription]);
+        NSLog(@"resetStore: Error removing persistent Store[%@]: %@", storeURL, [error localizedDescription]);
       }
-    } else {
-      NSLog(@"resetStore: Error removing persistent Store[%@]: %@", storeURL, [error localizedDescription]);
-      [managedObjectContext unlock];
     }
-  }
+  }];
   return success;
 }
 
